@@ -6,12 +6,20 @@
 #define PIN_BLINK_LEFT 9
 #define PIN_BLINK_RIGHT 8
 
-#define PIN_BREAK_LEFT_LIGHT 7
-#define PIN_BREAK_RIGHT_LIGHT 6
+#define PIN_BRAKE_LEFT_LIGHT 7
+#define PIN_BRAKE_RIGHT_LIGHT 6
 #define PIN_REVERSE_LIGHT 5
 //PIN_INPUT
+#define INPUT_DAY_LIGHT A1
+#define INPUT_LOW_LIGHT A2
+#define INPUT_HIGH_LIGHT A3
+#define INPUT_BLINK_LEFT A4
+#define INPUT_BLINK_RIGHT A5
+#define INPUT_BLINK_BOTH A6
+#define INPUT_BRAKE_LIGHT A7
+#define INPUT_REVERSE_LIGHT A0
 
-//MISC
+//BLINKERS
 #define BLINK_DELAY 450
 #define BLINK_TIMER_NAME "BLINK"
 #define BLINK_TIMER_SHUT "DONT"
@@ -26,7 +34,7 @@ long timerMillis[TIMER_LIST_SIZE];
 //IMPORTS
 //#include <BuggyLights_Functions.ino>
 //DEBUG
-#define DEBUG_ENABLED 1
+#define DEBUG_ENABLED 0
 
 //GLOBAL_VARS
 byte blinkStatus = 0;
@@ -42,9 +50,18 @@ void setup() {
   pinMode(PIN_HIGH_LIGHT, OUTPUT);
   pinMode(PIN_BLINK_LEFT, OUTPUT);
   pinMode(PIN_BLINK_RIGHT, OUTPUT);
-  pinMode(PIN_BREAK_LEFT_LIGHT, OUTPUT);
-  pinMode(PIN_BREAK_RIGHT_LIGHT, OUTPUT);
+  pinMode(PIN_BRAKE_LEFT_LIGHT, OUTPUT);
+  pinMode(PIN_BRAKE_RIGHT_LIGHT, OUTPUT);
   pinMode(PIN_REVERSE_LIGHT, OUTPUT);
+
+  pinMode(INPUT_DAY_LIGHT, INPUT);
+  pinMode(INPUT_LOW_LIGHT, INPUT);
+  pinMode(INPUT_HIGH_LIGHT, INPUT);
+  pinMode(INPUT_BLINK_LEFT, INPUT);
+  pinMode(INPUT_BLINK_RIGHT, INPUT);
+  pinMode(INPUT_BLINK_BOTH, INPUT);
+  pinMode(INPUT_BRAKE_LIGHT, INPUT);
+  pinMode(INPUT_REVERSE_LIGHT, INPUT);
 
   if (DEBUG_ENABLED == 1) {
     Serial.begin(9600);
@@ -56,22 +73,39 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
-  int _input = -1;
-  if (Serial.available() > 0) {
-    _input = Serial.readString().toInt();
-    Serial.println(_input);
-  }
-  if (_input != -1) {
-    blinker(_input);
-    Serial.println("BLINK!");
-  } else {
-    blinker(blinkStatus);
-  }
+  byte _blink = getBlinkerInput();
+  blinker(_blink);
+
 
 }
 
 //FUNCTIONS
+//PIN_READERS
+bool analogPinRead(int _pin){
+  if(analogRead(_pin) > 200){
+    return true;
+  }
+  return false;
+}
 //BLINKER
+byte getBlinkerInput() {
+  bool _both = (bool)analogPinRead(INPUT_BLINK_BOTH);
+  if (_both) {
+    return BLINK_BOTH;
+  }
+  bool _left = (bool)analogPinRead(INPUT_BLINK_LEFT);
+  bool _right = (bool)analogPinRead(INPUT_BLINK_RIGHT);
+  if (_left && _right) {
+    return BLINK_BOTH;
+  }
+  if (_left) {
+    return BLINK_LEFT;
+  }
+  if (_right) {
+    return BLINK_RIGHT;
+  }
+  return BLINK_NONE;
+}
 bool blinker(byte _mode) {
   /* 0 - Disabled
      1 - left
@@ -79,14 +113,13 @@ bool blinker(byte _mode) {
      3 - both
   */
   if (_mode != blinkStatus) {
-    if(!(awaits(BLINK_TIMER_SHUT) || awaits(BLINK_TIMER_NAME))){
-      timer(0,BLINK_TIMER_NAME);
+    if (!(awaits(BLINK_TIMER_SHUT) || awaits(BLINK_TIMER_NAME))) {
+      timer(0, BLINK_TIMER_NAME);
     }
-    
   }
+  blinkStatus = _mode;
   if (clk(BLINK_TIMER_NAME)) {
     timer(BLINK_DELAY, BLINK_TIMER_SHUT);
-
     switch (_mode) {
       case BLINK_LEFT:
         digitalWrite(PIN_BLINK_LEFT, HIGH);
@@ -105,14 +138,10 @@ bool blinker(byte _mode) {
   if (clk(BLINK_TIMER_SHUT)) {
     if (_mode != BLINK_NONE) {
       timer(BLINK_DELAY, BLINK_TIMER_NAME);
-      digitalWrite(PIN_BLINK_LEFT, LOW);
-      digitalWrite(PIN_BLINK_RIGHT, LOW);
     }
+    digitalWrite(PIN_BLINK_LEFT, LOW);
+    digitalWrite(PIN_BLINK_RIGHT, LOW);
   }
-  blinkStatus = _mode;
-}
-bool shutBlinker() {
-
 }
 //END OF BLINKER
 //CLK AND TIMER
