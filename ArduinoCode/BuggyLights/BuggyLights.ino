@@ -1,14 +1,11 @@
+#include <FastLED.h>
+
 //PIN_OUTPUT
-#define PIN_DAY_LIGHT 12
-#define PIN_LOW_LIGHT 11
-#define PIN_HIGH_LIGHT 10
+#define PIN_FRONT_LEFT 12
+#define PIN_FRONT_RIGHT 11
+#define PIN_REAR_LEFT 10
+#define PIN_REAR_RIGHT 9
 
-#define PIN_BLINK_LEFT 9
-#define PIN_BLINK_RIGHT 8
-
-#define PIN_BRAKE_LEFT_LIGHT 7
-#define PIN_BRAKE_RIGHT_LIGHT 6
-#define PIN_REVERSE_LIGHT 5
 //PIN_INPUT
 #define INPUT_DAY_LIGHT A1
 #define INPUT_LOW_LIGHT A2
@@ -33,8 +30,21 @@ String timerNames[TIMER_LIST_SIZE];
 long timerMillis[TIMER_LIST_SIZE];
 //IMPORTS
 //#include <BuggyLights_Functions.ino>
+//COLLORS
+CRGB c_blink = CRGB(255,255,0);
+CRGB c_break = CRGB(255,0,0);
+CRGB c_break_low = CRGB(100,0,0);
+CRGB c_daylight = CRGB(255,255,255);
+CRGB c_reverse = CRGB(255,255,255);
+//ARRAY_SIZE
+#define REAR_SIZE 5
+CRGB rear_left[REAR_SIZE];
+CRGB rear_right[REAR_SIZE];
+#define FRONT_SIZE 5
+CRGB front_left[FRONT_SIZE];
+CRGB front_right[FRONT_SIZE];
 //DEBUG
-#define DEBUG_ENABLED 0
+#define DEBUG_ENABLED 1
 
 //GLOBAL_VARS
 byte blinkStatus = 0;
@@ -44,45 +54,92 @@ byte blinkStatus = 0;
    3 - both
 */
 void setup() {
-  // put your setup code here, to run once:
-  pinMode(PIN_DAY_LIGHT, OUTPUT);
-  pinMode(PIN_LOW_LIGHT, OUTPUT);
-  pinMode(PIN_HIGH_LIGHT, OUTPUT);
-  pinMode(PIN_BLINK_LEFT, OUTPUT);
-  pinMode(PIN_BLINK_RIGHT, OUTPUT);
-  pinMode(PIN_BRAKE_LEFT_LIGHT, OUTPUT);
-  pinMode(PIN_BRAKE_RIGHT_LIGHT, OUTPUT);
-  pinMode(PIN_REVERSE_LIGHT, OUTPUT);
-
-  pinMode(INPUT_DAY_LIGHT, INPUT);
-  pinMode(INPUT_LOW_LIGHT, INPUT);
-  pinMode(INPUT_HIGH_LIGHT, INPUT);
-  pinMode(INPUT_BLINK_LEFT, INPUT);
-  pinMode(INPUT_BLINK_RIGHT, INPUT);
-  pinMode(INPUT_BLINK_BOTH, INPUT);
-  pinMode(INPUT_BRAKE_LIGHT, INPUT);
-  pinMode(INPUT_REVERSE_LIGHT, INPUT);
-
+  //take the traash out (arrays)
+  for(int i = 0; i < REAR_SIZE; i++){
+    rear_left[i] = CRGB(0,0,0);
+    rear_right[i] = CRGB(0,0,0);
+  }
+  for(int i = 0; i < FRONT_SIZE; i++){
+    front_left[i] = CRGB(0,0,0);
+    front_right[i] = CRGB(0,0,0);
+  }
+  //pinMode
+  pinMode(INPUT_DAY_LIGHT, INPUT_PULLUP);
+  pinMode(INPUT_LOW_LIGHT, INPUT_PULLUP);
+  pinMode(INPUT_HIGH_LIGHT, INPUT_PULLUP);
+  pinMode(INPUT_BLINK_LEFT, INPUT_PULLUP);
+  pinMode(INPUT_BLINK_RIGHT, INPUT_PULLUP);
+  pinMode(INPUT_BLINK_BOTH, INPUT_PULLUP);
+  pinMode(INPUT_BRAKE_LIGHT, INPUT_PULLUP);
+  pinMode(INPUT_REVERSE_LIGHT, INPUT_PULLUP);
+  //Set led things
+  FastLED.addLeds<WS2812, PIN_FRONT_LEFT, GRB>(front_left, FRONT_SIZE);
+  FastLED.addLeds<WS2812, PIN_FRONT_RIGHT, GRB>(front_right, FRONT_SIZE);
+  FastLED.addLeds<WS2812, PIN_REAR_LEFT, GRB>(rear_left, REAR_SIZE);
+  FastLED.addLeds<WS2812, PIN_REAR_RIGHT, GRB>(rear_right, REAR_SIZE);
+  //DEBUG
   if (DEBUG_ENABLED == 1) {
     Serial.begin(9600);
   }
-  //digitalWrite(PIN_LOW_LIGHT, HIGH);
-  //analogWrite(PIN_LOW_LIGHT, 5);
-  //timer(BLINK_DELAY,"TEST");
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
+  
   byte _blink = getBlinkerInput();
+  
   blinker(_blink);
+  FastLED.show();
+  dayLightAndBreak();
 
-
+  if(awaits(BLINK_TIMER_SHUT)){
+    Serial.println(blinkStatus);
+    Serial.println("awaits");
+  } else {
+    Serial.println(blinkStatus);
+    Serial.println("does not");
+  }
+  
+  FastLED.show();
 }
 
 //FUNCTIONS
+//BRAKE_LIGHTS
+void dayLightAndBreak() {
+  bool _lowLight = analogPinRead(INPUT_LOW_LIGHT);
+  bool _breakLight = analogPinRead(INPUT_BRAKE_LIGHT);
+  if(!(awaits(BLINK_TIMER_SHUT) && (blinkStatus == BLINK_BOTH || blinkStatus == BLINK_RIGHT))){
+    Serial.println("JOIN RIGHT");
+    if (_lowLight) {
+      arrayFullChange(front_right, c_daylight);
+      if (_breakLight) {
+        arrayFullChange(rear_right, c_break);
+      } else {
+        arrayFullChange(rear_right, c_break_low);
+      }
+    } else {
+      arrayFullChange(front_right, c_daylight);
+      arrayFullChange(rear_right, c_break);
+    }
+  }
+  if(!(awaits(BLINK_TIMER_SHUT) && (blinkStatus == BLINK_BOTH || blinkStatus == BLINK_LEFT))){
+    Serial.println("JOIN LEFT");
+    if (_lowLight) {
+      arrayFullChange(front_left, c_daylight);
+      if (_breakLight) {
+        arrayFullChange(rear_left, c_break);
+      } else {
+        arrayFullChange(rear_left, c_break_low);
+      }
+    } else {
+      arrayFullChange(front_left, c_daylight);
+      arrayFullChange(rear_left, c_break);
+    }
+  }
+  //analogPinRead(INPUT_BRAKE_LIGHT);
+}
 //PIN_READERS
-bool analogPinRead(int _pin){
-  if(analogRead(_pin) > 200){
+bool analogPinRead(int _pin) {
+  if (analogRead(_pin) > 450) {
     return true;
   }
   return false;
@@ -122,14 +179,18 @@ bool blinker(byte _mode) {
     timer(BLINK_DELAY, BLINK_TIMER_SHUT);
     switch (_mode) {
       case BLINK_LEFT:
-        digitalWrite(PIN_BLINK_LEFT, HIGH);
+        arrayFullChange(front_left, c_blink);
+        arrayFullChange(rear_left, c_blink);
         break;
       case BLINK_RIGHT:
-        digitalWrite(PIN_BLINK_RIGHT, HIGH);
+        arrayFullChange(front_right, c_blink);
+        arrayFullChange(rear_right, c_blink);
         break;
       case BLINK_BOTH:
-        digitalWrite(PIN_BLINK_LEFT, HIGH);
-        digitalWrite(PIN_BLINK_RIGHT, HIGH);
+        arrayFullChange(front_left, c_blink);
+        arrayFullChange(front_right, c_blink);
+        arrayFullChange(rear_left, c_blink);
+        arrayFullChange(rear_right, c_blink);
         break;
       default:
         break;
@@ -139,8 +200,10 @@ bool blinker(byte _mode) {
     if (_mode != BLINK_NONE) {
       timer(BLINK_DELAY, BLINK_TIMER_NAME);
     }
-    digitalWrite(PIN_BLINK_LEFT, LOW);
-    digitalWrite(PIN_BLINK_RIGHT, LOW);
+    //arrayFullChange(front_left, c_daylight);
+    //arrayFullChange(front_right, c_daylight);
+    //arrayFullChange(rear_left, c_break_low);
+    //arrayFullChange(rear_right, c_break_low);
   }
 }
 //END OF BLINKER
@@ -193,3 +256,11 @@ bool removeClk(String _clk) {
   return false;
 }
 //END OF CLK AND TIMER
+//ARRAY FUNCTIONS
+void arrayFullChange(CRGB _array[], CRGB _color){
+  int _size = sizeof(_array);
+  for(int i = 0; i < _size; i++){
+    _array[i] = _color;
+  }
+}
+//END OF ARRAY FUNCTIONS
