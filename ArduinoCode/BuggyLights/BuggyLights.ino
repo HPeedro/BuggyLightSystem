@@ -33,7 +33,7 @@ String timerNames[TIMER_LIST_SIZE];
 long timerMillis[TIMER_LIST_SIZE];
 
 //COLLORS DEFAULT
-#define LIGHT_BRIGHTNESS 10 // - general light brightness
+#define LIGHT_BRIGHTNESS 50 // - general light brightness
 CRGB c_blink = CRGB(255,255,0); // - blinker color
 CRGB c_break = CRGB(255,0,0); // - break light color
 CRGB c_break_low = CRGB(100,0,0); // - rear light color
@@ -62,8 +62,8 @@ byte all_cops_pos = 0;
 #define COP_DELAY "COP"
 
 //DEBUG
-#define DEBUG_ENABLED 0 // - 1 = enable 
-#define DEV_MODE 1 // - 1 = enable
+#define DEBUG_ENABLED 1 // - 1 = enable 
+#define DEV_MODE 0 // - 1 = enable
 
 //GLOBAL_VARS
 byte blinkStatus = 0;
@@ -74,16 +74,18 @@ byte blinkStatus = 0;
 */
 void setup() {
   
-  //pinMode
-  pinMode(INPUT_DAY_LIGHT, INPUT_PULLUP);
-  pinMode(INPUT_LOW_LIGHT, INPUT_PULLUP);
-  pinMode(INPUT_HIGH_LIGHT, INPUT_PULLUP);
-  pinMode(INPUT_BLINK_LEFT, INPUT_PULLUP);
-  pinMode(INPUT_BLINK_RIGHT, INPUT_PULLUP);
-  pinMode(INPUT_BLINK_BOTH, INPUT_PULLUP);
-  pinMode(INPUT_BRAKE_LIGHT, INPUT_PULLUP);
-  pinMode(INPUT_REVERSE_LIGHT, INPUT_PULLUP);
-  
+  //no inputs on dev mode
+  if(DEV_MODE == 1) {
+    //pinMode
+    pinMode(INPUT_DAY_LIGHT, INPUT_PULLUP);
+    pinMode(INPUT_LOW_LIGHT, INPUT_PULLUP);
+    pinMode(INPUT_HIGH_LIGHT, INPUT_PULLUP);
+    pinMode(INPUT_BLINK_LEFT, INPUT_PULLUP);
+    pinMode(INPUT_BLINK_RIGHT, INPUT_PULLUP);
+    pinMode(INPUT_BLINK_BOTH, INPUT_PULLUP);
+    pinMode(INPUT_BRAKE_LIGHT, INPUT_PULLUP);
+    pinMode(INPUT_REVERSE_LIGHT, INPUT_PULLUP);
+  }
   //Set led things
   FastLED.addLeds<WS2812, PIN_FRONT_LEFT, GRB>(front_left, FRONT_SIZE);
   FastLED.addLeds<WS2812, PIN_FRONT_RIGHT, GRB>(front_right, FRONT_SIZE);
@@ -97,7 +99,7 @@ void setup() {
     Serial.begin(9600);
   }
   
-  //take the traash out
+  //take the trash out
   for(int i = 0; i < REAR_SIZE; i++){
     rear_left[i] = CRGB(0,0,0);
     rear_right[i] = CRGB(0,0,0);
@@ -106,11 +108,16 @@ void setup() {
     front_left[i] = CRGB(0,0,0);
     front_right[i] = CRGB(0,0,0);
   }
+  //FastLED.clear();  // clear all pixel data
+  //FastLED.show();
+  //Serial.println("AOBA");
+  //FastLED.showColor(CRGB(0,0,0),0);
   FastLED.clear(true);
+  FastLED.show();
 }
 
 void loop() {
-
+  
   if(DEV_MODE == 0){
     //NORMAL OPERATION
     byte _blink = getBlinkerInput();
