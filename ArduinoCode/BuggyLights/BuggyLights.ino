@@ -8,15 +8,17 @@
 #define PIN_REAR_LEFT 10
 #define PIN_REAR_RIGHT 9
 
+#define PIN_LOW_LIGHT A1
+
 //PIN_INPUT
-#define INPUT_DAY_LIGHT A1
-#define INPUT_LOW_LIGHT A2
-#define INPUT_HIGH_LIGHT A3
-#define INPUT_BLINK_LEFT A4
-#define INPUT_BLINK_RIGHT A5
-#define INPUT_BLINK_BOTH A6
-#define INPUT_BRAKE_LIGHT A7
-#define INPUT_REVERSE_LIGHT A0
+#define INPUT_DAY_LIGHT 2
+#define INPUT_LOW_LIGHT 3
+//#define INPUT_HIGH_LIGHT A3
+#define INPUT_BLINK_LEFT 4
+#define INPUT_BLINK_RIGHT 5
+#define INPUT_BLINK_BOTH 6
+#define INPUT_BRAKE_LIGHT 7
+#define INPUT_REVERSE_LIGHT 8
 
 //BLINKERS
 #define BLINK_DELAY 450 // - blinker interval delay
@@ -41,10 +43,10 @@ CRGB c_daylight = CRGB(255,255,255); // - daylight color
 CRGB c_reverse = CRGB(255,255,255); // - reverse light color
 
 //ARRAY_RGB_DEFAULT
-#define REAR_SIZE 5 // - number of leds on each rear light
+#define REAR_SIZE 11 // - number of leds on each rear light
 CRGB rear_left[REAR_SIZE];
 CRGB rear_right[REAR_SIZE];
-#define FRONT_SIZE 5 // - number of leds on each front light
+#define FRONT_SIZE 11 // - number of leds on each front light
 CRGB front_left[FRONT_SIZE];
 CRGB front_right[FRONT_SIZE];
 
@@ -72,6 +74,11 @@ byte blinkStatus = 0;
    2 - right
    3 - both
 */
+bool u_dayLight = false;
+CRGB u_rearSet = c_break_low;
+bool u_lowLight = false;
+bool u_lowLightSwitch = false;
+
 void setup() {
   
   //no inputs on dev mode
@@ -79,12 +86,14 @@ void setup() {
     //pinMode
     pinMode(INPUT_DAY_LIGHT, INPUT_PULLUP);
     pinMode(INPUT_LOW_LIGHT, INPUT_PULLUP);
-    pinMode(INPUT_HIGH_LIGHT, INPUT_PULLUP);
+    //pinMode(INPUT_HIGH_LIGHT, INPUT);
     pinMode(INPUT_BLINK_LEFT, INPUT_PULLUP);
     pinMode(INPUT_BLINK_RIGHT, INPUT_PULLUP);
     pinMode(INPUT_BLINK_BOTH, INPUT_PULLUP);
     pinMode(INPUT_BRAKE_LIGHT, INPUT_PULLUP);
     pinMode(INPUT_REVERSE_LIGHT, INPUT_PULLUP);
+
+    pinMode(PIN_LOW_LIGHT, OUTPUT);
   }
   //Set led things
   FastLED.addLeds<WS2812, PIN_FRONT_LEFT, GRB>(front_left, FRONT_SIZE);
@@ -108,10 +117,7 @@ void setup() {
     front_left[i] = CRGB(0,0,0);
     front_right[i] = CRGB(0,0,0);
   }
-  //FastLED.clear();  // clear all pixel data
-  //FastLED.show();
-  //Serial.println("AOBA");
-  //FastLED.showColor(CRGB(0,0,0),0);
+  
   FastLED.clear(true);
   FastLED.show();
 }
@@ -122,7 +128,9 @@ void loop() {
     //NORMAL OPERATION
     byte _blink = getBlinkerInput();
     blinker(_blink);
+    rearLights();
     dayLightAndBreak();
+    toggleLights();
   } else {
     //CUSTOM DEV OPERATIONS
     copMode();
@@ -131,34 +139,57 @@ void loop() {
 }
 
 //FUNCTIONS
+//LOW_LIGHT_TOGGLE
+void toggleLights(){
+  bool _switch = pullUpReader(INPUT_LOW_LIGHT);
+  if(_switch && !u_lowLightSwitch){
+    Serial.println("LL-CHANGE");
+    if(u_lowLight){
+      u_lowLight = false;
+      digitalWrite(PIN_LOW_LIGHT,HIGH);
+      Serial.println("HIGH");
+    } else {
+      u_lowLight = true;
+      digitalWrite(PIN_LOW_LIGHT,LOW);
+      Serial.println("LOW");
+    }
+  }
+  u_lowLightSwitch = _switch;
+}
+//REVERSE_LIGHTS
+void rearLights(){
+  if(pullUpReader(INPUT_REVERSE_LIGHT)){
+    u_rearSet = c_reverse;
+    return;
+  }
+  if(pullUpReader(INPUT_BRAKE_LIGHT)){
+    u_rearSet = c_break;
+    return;
+  }
+  u_rearSet = c_break_low;
+  return;
+}
 //BRAKE_LIGHTS
 void dayLightAndBreak() {
-  bool _lowLight = analogPinRead(INPUT_LOW_LIGHT);
-  bool _breakLight = analogPinRead(INPUT_BRAKE_LIGHT);
+  
+  //bool _lowLight = pullUpReader(INPUT_LOW_LIGHT);
+  
   if(!(awaits(BLINK_TIMER_SHUT) && (blinkStatus == BLINK_BOTH || blinkStatus == BLINK_RIGHT))){
-    if (_lowLight) {
+    if (u_dayLight) {
       arrayFullChange(front_right, FRONT_SIZE, c_daylight);
-      if (_breakLight) {
-        arrayFullChange(rear_right, REAR_SIZE, c_break);
-      } else {
-        arrayFullChange(rear_right, REAR_SIZE, c_break_low);
-      }
+      arrayFullChange(rear_right, REAR_SIZE, u_rearSet);
     } else {
       arrayFullChange(front_right, FRONT_SIZE, c_daylight);
-      arrayFullChange(rear_right, REAR_SIZE, c_break);
+      arrayFullChange(rear_right, REAR_SIZE, u_rearSet);
     }
   }
   if(!(awaits(BLINK_TIMER_SHUT) && (blinkStatus == BLINK_BOTH || blinkStatus == BLINK_LEFT))){
-    if (_lowLight) {
+    if (u_dayLight) {
       arrayFullChange(front_left, FRONT_SIZE, c_daylight);
-      if (_breakLight) {
-        arrayFullChange(rear_left, REAR_SIZE, c_break);
-      } else {
-        arrayFullChange(rear_left, REAR_SIZE, c_break_low);
-      }
+      arrayFullChange(rear_left, REAR_SIZE, u_rearSet);
     } else {
       arrayFullChange(front_left, FRONT_SIZE, c_daylight);
-      arrayFullChange(rear_left, REAR_SIZE, c_break);
+      arrayFullChange(rear_left, REAR_SIZE, u_rearSet);
     }
   }
   //analogPinRead(INPUT_BRAKE_LIGHT);
@@ -170,14 +201,20 @@ bool analogPinRead(int _pin) {
   }
   return false;
 }
+bool pullUpReader(int _pin) {
+  if(!digitalRead(_pin)) {
+    return false;
+  }
+  return true;
+}
 //BLINKER
 byte getBlinkerInput() {
-  bool _both = (bool)analogPinRead(INPUT_BLINK_BOTH);
+  bool _both = (bool)pullUpReader(INPUT_BLINK_BOTH);
   if (_both) {
     return BLINK_BOTH;
   }
-  bool _left = (bool)analogPinRead(INPUT_BLINK_LEFT);
-  bool _right = (bool)analogPinRead(INPUT_BLINK_RIGHT);
+  bool _left = (bool)pullUpReader(INPUT_BLINK_LEFT);
+  bool _right = (bool)pullUpReader(INPUT_BLINK_RIGHT);
   if (_left && _right) {
     return BLINK_BOTH;
   }
